@@ -28,7 +28,6 @@ from validator import (
     validate_workbook,
 )
 
-print("app.py started")
 APP = Flask(__name__)
 
 # Store uploads in a local folder so the app can read them.
@@ -196,6 +195,5 @@ def api_help():
 
 
 if __name__ == "__main__":
-    # For local dev: python app.py
-    # Then open http://127.0.0.1:5000
-    APP.run(host="127.0.0.1", port=5000, debug=True)
+    port = int(os.environ.get("PORT", "5050"))
+    APP.run(host="0.0.0.0", port=port, debug=True)
