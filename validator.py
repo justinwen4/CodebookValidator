@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple, Any
 
 import openpyxl
 
+import unicodedata
 # PDF parsing: try pdfplumber if installed (best), else fall back to PyPDF2.
 try:
     import pdfplumber  # type: ignore
@@ -142,46 +143,106 @@ def extract_pdf_model(pdf_path: str) -> Dict[str, Any]:
 
 def _extract_yes_no_rules(text: str) -> List[Rule]:
     """
-    Heuristic: if a variable line includes "(Yes = 1, No = 0)" we enforce allowed values {0,1}.
-    This is high-confidence because it's explicit.
+    Enforce allowed values {0,1} for variables marked as (Yes = 1, No = 0).
+
+    Handles:
+      A) [var] line followed by a wrapped continuation line containing (Yes = 1, No = 0)
+      B) a header line containing (Yes = 1, No = 0) followed by a dash-list of [vars]
     """
     rules: List[Rule] = []
     lines = text.splitlines()
+
+    def add(var: str, evidence: str) -> None:
+        rules.append(Rule(
+            rule_id=f"YESNO_{var.strip('[]')}",
+            source="pdf",
+            confidence="high",
+            kind="allowed_values",
+            variables=[var],
+            when=None,
+            assert_={"allowed_values": [0, 1]},
+            else_=None,
+            evidence=evidence
+        ))
+
+    # ---- Pattern A: [var] + nearby yes/no, but stop if next line introduces a different var ----
     for i, line in enumerate(lines):
         vars_in_line = VAR_PATTERN.findall(line)
         if not vars_in_line:
             continue
 
-        if "Yes = 1" in line and "No = 0" in line:
+        # Collect a short "continuation" blob until a *different* variable appears
+        cont = [line]
+        for k in range(1, 3):  # look ahead up to 2 lines
+            if i + k >= len(lines):
+                break
+            nxt = lines[i + k]
+            nxt_vars = VAR_PATTERN.findall(nxt)
+            if nxt_vars and any(nv not in vars_in_line for nv in nxt_vars):
+                break
+            cont.append(nxt)
+
+        blob = " ".join(cont)
+        if "Yes = 1" in blob and "No = 0" in blob:
+            evidence = " ".join([c.strip() for c in cont if c.strip()][:2])
             for var in vars_in_line:
-                evidence = line.strip()
-                rules.append(Rule(
-                    rule_id=f"YESNO_{var.strip('[]')}",
-                    source="pdf",
-                    confidence="high",
-                    kind="allowed_values",
-                    variables=[var],
-                    when=None,
-                    assert_={"allowed_values": [0, 1]},
-                    else_=None,
-                    evidence=evidence
-                ))
-    return rules
+                add(var, evidence or line.strip())
+            continue
+
+        # Common wrap: yes/no on the immediate next line
+        if i + 1 < len(lines):
+            nxt = lines[i + 1]
+            if ("Yes = 1" in nxt and "No = 0" in nxt) and not VAR_PATTERN.search(nxt):
+                for var in vars_in_line:
+                    add(var, f"{line.strip()} {nxt.strip()}")
+
+    # ---- Pattern B: header line with Yes/No applies to a following dash-list of variables ----
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if ("Yes = 1" in line and "No = 0" in line) and not VAR_PATTERN.search(line):
+            evidence = line.strip()
+            collected: List[str] = []
+
+            for j in range(i + 1, min(i + 35, len(lines))):
+                nxt = lines[j].strip()
+                if not nxt:
+                    if collected:
+                        break
+                    continue
+                if nxt.startswith("•"):  # next question block
+                    break
+                if nxt.startswith(("– [", "- [", "— [")):
+                    collected.extend(VAR_PATTERN.findall(nxt))
+                    continue
+                if collected and VAR_PATTERN.search(nxt):
+                    break
+
+            for var in sorted(set(collected)):
+                add(var, evidence)
+
+        i += 1
+
+    # De-dup by variable
+    dedup: Dict[str, Rule] = {}
+    for r in rules:
+        k = r.variables[0]
+        if k not in dedup:
+            dedup[k] = r
+    return list(dedup.values())
 
 
 def _extract_enumeration_rules(text: str) -> List[Rule]:
     """
     Heuristic: detect enumerated code options like:
-      1. No
-      2. Informal restrictions
-      3. Formal restrictions
+      1. No restrictions
+      2. Restricted access
+      3. Restricted actions
 
-    Real PDFs often wrap long list items onto multiple lines. So we:
-    - start at a line containing a variable like "[health_pre_types]"
-    - scan forward until we hit the next bullet/variable ("• [") or we get too far
-    - collect any lines that look like "<number>." at the start
-
-    This is medium-confidence because PDF extraction can still be messy.
+    IMPORTANT: Avoid false positives where the PDF has numbered *variable lists* like:
+      1. [health_post_vacc]
+      2. [health_post_dis]
+    Those are NOT enumerated value options.
     """
     rules: List[Rule] = []
     lines = text.splitlines()
@@ -194,12 +255,16 @@ def _extract_enumeration_rules(text: str) -> List[Rule]:
             i += 1
             continue
 
-        var = vars_in_line[0]
+        # ✅ Only start enumerations from bullet-style variable declarations ("• [var] ...")
+        # This avoids misreading numbered variable lists as allowed values.
+        if not line.lstrip().startswith("•"):
+            i += 1
+            continue
 
+        var = vars_in_line[0]
         allowed: List[int] = []
         evidence_lines = [line.strip()]
 
-        # Scan forward for up to ~25 lines or until next bullet variable.
         for j in range(i + 1, min(i + 26, len(lines))):
             nxt = lines[j].strip()
 
@@ -207,12 +272,15 @@ def _extract_enumeration_rules(text: str) -> List[Rule]:
             if nxt.startswith("• ["):
                 break
 
+            # ✅ If a numbered line contains a different bracketed var, it's not an option list.
+            if re.match(r"^\s*\d+\.\s*", lines[j]) and VAR_PATTERN.search(nxt) and (var not in nxt):
+                break
+
             m = re.match(r"^\s*(\d+)\.\s*", lines[j])
             if m:
                 allowed.append(int(m.group(1)))
                 evidence_lines.append(nxt)
             else:
-                # Wrapped/continuation line: keep as evidence if we are in a list already.
                 if allowed:
                     evidence_lines.append(nxt)
 
@@ -340,6 +408,152 @@ def _extract_restrict_cleav_and_year_rules(text: str) -> List[Rule]:
     return rules
 
 
+_MONTHS = {m.lower() for m in [
+    "January","February","March","April","May","June","July","August",
+    "September","October","November","December"
+]}
+_CITATION_STOPSTART = {
+    # to avoid false positives like "(signed on 20th June 1999)"
+    "signed","accessed","see","as","on","in","during","from","at","by","for",
+    "with","without","after","before","between","since","until","updated","retrieved"
+}
+
+def _norm_name(s: str) -> str:
+    s = unicodedata.normalize("NFKD", s)
+    s = s.replace("’", "'").replace("–", "-").replace("—", "-")
+    s = re.sub(r"[^A-Za-z0-9\-'\s]", "", s)
+    s = re.sub(r"\s+", " ", s).strip().lower()
+    return s
+
+def _extract_reference_index(wb: "openpyxl.Workbook") -> Dict[str, Any]:
+    """
+    Build a set of normalized author/org tokens from the References/Citations tab.
+    Handles newline-separated references in a single cell.
+    Handles em-dash repeated-author lines (e.g., '———. 2013. ...').
+    """
+    name_map = {n.lower(): n for n in wb.sheetnames}
+    ref_sheet = None
+    for key in ["references", "citations", "bibliography", "sources"]:
+        if key in name_map:
+            ref_sheet = name_map[key]
+            break
+
+    if not ref_sheet:
+        return {"sheet": None, "names_norm": set(), "raw_lines": 0}
+
+    ws = wb[ref_sheet]
+
+    # Collect all text from column B (like your template)
+    raw_cells: List[str] = []
+    for r in range(1, ws.max_row + 1):
+        val = ws.cell(r, 2).value
+        if not val:
+            continue
+        s = str(val).strip()
+        if not s or s.lower() == "references":
+            continue
+        raw_cells.append(s)
+
+    lines: List[str] = []
+    for cell_text in raw_cells:
+        for ln in cell_text.splitlines():
+            ln = ln.strip()
+            if ln:
+                lines.append(ln)
+
+    names_norm: set = set()
+    prev_author_block: Optional[str] = None
+
+    for ln in lines:
+        # If line begins with em-dash / repeated author, substitute previous author block
+        if re.match(r"^[—–-]{2,}", ln) and prev_author_block:
+            rest = re.sub(r"^[—–-]{2,}\s*", "", ln).lstrip(". ").strip()
+            ln = f"{prev_author_block}. {rest}"
+
+        ym = re.search(r"\b(\d{4}[a-z]?|n\.d\.)\b", ln)
+        if not ym:
+            continue
+
+        author_block = ln[:ym.start()].strip().rstrip(".")
+        if author_block:
+            prev_author_block = author_block
+
+        # If commas exist, likely "Lastname, Firstname, and Lastname ..."
+        if "," in author_block:
+            tmp = author_block.replace(" and ", ", ").replace(" & ", ", ")
+            parts = [p.strip() for p in tmp.split(",") if p.strip()]
+            for p in parts:
+                w = p.split()
+                if not w:
+                    continue
+                if w[0].lower() == "and" and len(w) > 1:
+                    w = w[1:]
+                # heuristic: surname sometimes appears first (comma style) OR last (e.g., "Egbert Sondorp")
+                candidates = {w[0], w[-1]}
+                for c in candidates:
+                    if re.match(r"^[A-Z]", c):
+                        names_norm.add(_norm_name(c))
+        else:
+            # org / single-name author: keep full phrase plus first/last token
+            full = author_block.strip()
+            if full:
+                names_norm.add(_norm_name(full))
+                toks = full.split()
+                if toks:
+                    names_norm.add(_norm_name(toks[0]))
+                    names_norm.add(_norm_name(toks[-1]))
+
+    return {"sheet": ref_sheet, "names_norm": names_norm, "raw_lines": len(lines)}
+
+def _extract_cited_names_from_narrative(narrative: Any) -> List[Dict[str, Any]]:
+    """
+    Extract likely citation tokens from narrative parentheses that contain a year or n.d.
+    Avoid false positives like "(signed on 20th June 1999)".
+    """
+    
+    def _remove_quoted_spans(text: str) -> str:
+        """
+        Remove content inside straight or curly quotes to avoid flagging citations that appear
+        inside quoted source text.
+        """
+        # Handles: "..."  '...'  “...”  ‘...’
+        return re.sub(r'(["“”\'])(?:(?=(\\?))\2.)*?\1', "", text)
+
+    if not narrative:
+        return []
+
+    out: List[Dict[str, Any]] = []
+    text = _remove_quoted_spans(str(narrative))
+
+    for par in re.findall(r"\(([^()]{0,250})\)", text):
+        for seg in par.split(";"):
+            seg = seg.strip()
+            ym = re.search(r"\b(\d{4}[a-z]?|n\.d\.)\b", seg)
+            if not ym:
+                continue
+
+            author_part = seg[:ym.start()].strip()
+            if not author_part:
+                continue
+
+            first = re.match(r"^\s*([A-Za-z]+)", author_part)
+            if first and first.group(1).lower() in _CITATION_STOPSTART:
+                continue
+
+            author_part = re.sub(r"\bet al\.?\b", "", author_part)
+
+            toks = re.findall(r"[A-Z][A-Za-zÀ-ÖØ-öø-ÿ'’-]+", author_part)
+            toks = [t for t in toks if t.lower() not in _MONTHS]
+            if not toks:
+                continue
+
+            phrases = []
+            if len(toks) >= 2:
+                phrases.append(" ".join(toks[:2]))  # handles org-ish "Medica Kosova"
+
+            out.append({"tokens": toks, "phrases": phrases, "raw": seg})
+
+    return out
 # ----------------------------
 # Excel parsing
 # ----------------------------
@@ -415,6 +629,7 @@ def parse_excel_workbook(xlsx_path: str) -> Dict[str, Any]:
     """
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
 
+    reference_index = _extract_reference_index(wb)
     tabs: Dict[str, Any] = {}
     for sheet_name in wb.sheetnames:
         ws = wb[sheet_name]
@@ -452,7 +667,7 @@ def parse_excel_workbook(xlsx_path: str) -> Dict[str, Any]:
             "rows": rows,
         }
 
-    return {"path": xlsx_path, "tabs": tabs}
+    return {"path": xlsx_path, "tabs": tabs, "reference_index": reference_index}
 
 
 # ----------------------------
@@ -466,17 +681,41 @@ def validate_workbook(pdf_model: Dict[str, Any], workbook: Dict[str, Any]) -> Di
     Validate the parsed workbook against:
     - structural checks from PRD
     - high/medium confidence rules extracted from the PDF
+    - citation cross-check: cited author/org in narrative must exist in References tab
 
     Returns a report dict that can be rendered as HTML or JSON.
     """
     pdf_vars = set(pdf_model.get("variables", []))
     rules = [Rule(**r) for r in pdf_model.get("rules", [])]
 
+    # --- Workbook-level issues (NOT tied to any single tab) ---
+    workbook_issues: List[Issue] = []
+
+    # --- Citation reference index (built during parse_excel_workbook) ---
+    ref_index = workbook.get("reference_index", {}) or {}
+    ref_sheet = ref_index.get("sheet")
+    ref_names = ref_index.get("names_norm", set()) or set()
+    citations_enabled = bool(ref_sheet and ref_names)
+
+    # If citation checking isn't possible, record a single workbook-level warning once
+    if not citations_enabled:
+        workbook_issues.append(Issue(
+            severity="warning",
+            tab_name="(workbook)",
+            variable="(references)",
+            message="No References/Citations sheet detected (or it was empty); citation cross-check skipped.",
+            expected="A sheet named 'References' (or 'Citations') with reference entries in column B.",
+            actual=repr(ref_sheet),
+            evidence="Add a References tab or ensure references are present in column B."
+        ))
+
     all_tabs_report: List[Dict[str, Any]] = []
     total_errors = 0
     total_warnings = 0
 
     for tab_name, tab in workbook["tabs"].items():
+        if ref_sheet and tab_name == ref_sheet:
+            continue # don't validate the references sheet as a coding tab
         issues: List[Issue] = []
         ok_checks = 0
 
@@ -512,17 +751,48 @@ def validate_workbook(pdf_model: Dict[str, Any], workbook: Dict[str, Any]) -> Di
 
         # 3) Apply extracted rules (but only if their variables exist in this tab)
         for rule in rules:
-            # If the rule's main variable isn't on this tab, skip it.
-            # (Example: Education rules should not be applied to Land tab.)
             if not any(v in tab["rows"] for v in rule.variables):
-                continue
-            # If all variables in this rule are absent, skip.
-            if all(v not in tab["rows"] for v in rule.variables):
                 continue
 
             new_issues, new_ok = _apply_rule(rule, tab_name, tab["rows"])
             issues.extend(new_issues)
             ok_checks += new_ok
+
+        # 4) Citation cross-check (warn only)
+        if citations_enabled:
+            for var, row in tab.get("rows", {}).items():
+                narr = row.get("narrative")
+                cited = _extract_cited_names_from_narrative(narr)
+                if not cited:
+                    continue
+
+                for c in cited:
+                    ok = False
+
+                    # phrase match for org-like refs (e.g., "Medica Kosova")
+                    for ph in c.get("phrases", []):
+                        if _norm_name(ph) in ref_names:
+                            ok = True
+                            break
+
+                    # token match for surnames (e.g., Percival, Sondorp)
+                    bad = []
+                    for t in c.get("tokens", []):
+                        if _norm_name(t) in ref_names:
+                            ok = True
+                        else:
+                            bad.append(t)
+
+                    if not ok and bad:
+                        issues.append(Issue(
+                            severity="warning",
+                            tab_name=tab_name,
+                            variable=var,
+                            message=f"Citation author/org not found in References: {', '.join(sorted(set(bad)))}",
+                            expected="Author/org name appears somewhere in the References tab.",
+                            actual=f"In narrative citation: ({c.get('raw','')})",
+                            evidence=f"Narrative is on row {row.get('row_index')} (column F). References sheet detected: {ref_sheet}."
+                        ))
 
         # Summaries
         errors = sum(1 for i in issues if i.severity == "error")
@@ -543,9 +813,9 @@ def validate_workbook(pdf_model: Dict[str, Any], workbook: Dict[str, Any]) -> Di
             "total_errors": total_errors,
             "total_warnings": total_warnings,
         },
+        "workbook_issues": [asdict(i) for i in workbook_issues],
         "tabs": all_tabs_report,
     }
-
 
 def _apply_rule(rule: Rule, tab_name: str, rows: Dict[str, Dict[str, Any]]) -> Tuple[List[Issue], int]:
     """
@@ -709,7 +979,7 @@ def _eval_condition(when: Optional[Dict[str, Any]], rows: Dict[str, Dict[str, An
                 unknown = True
                 continue
             val = rows[var]["code"]
-            if val is None:
+            if val is None or val == "NA":
                 unknown = True
                 continue
             if val == want:
