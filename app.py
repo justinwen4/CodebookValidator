@@ -44,13 +44,13 @@ HTML = """
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
       :root{
-        --bg: #f7f8fb;
-        --card: #ffffff;
-        --text: #0b0f19;
-        --muted: #5b6474;
-        --border: #e6e8ee;
-        --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-        --radius: 16px;
+        --page-bg: #f6f7f9;
+        --surface: #ffffff;
+        --text: #111827;
+        --muted: #4b5563;
+        --border: #d7dbe4;
+        --border-strong: #c9cfdb;
+        --radius: 6px;
       }
 
       * { box-sizing: border-box; }
@@ -59,7 +59,7 @@ HTML = """
         margin: 0;
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
         color: var(--text);
-        background: var(--bg);
+        background: var(--page-bg);
       }
 
       .muted { color: var(--muted); }
@@ -69,131 +69,140 @@ HTML = """
         position: sticky;
         top: 0;
         z-index: 10;
-        background: rgba(255,255,255,0.92);
-        backdrop-filter: blur(10px);
+        background: var(--surface);
         border-bottom: 1px solid var(--border);
-        padding: 18px 22px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        padding: 14px 22px;
       }
       .brand-title{
-        font-weight: 800;
-        letter-spacing: -0.02em;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        font-size: 14px;
       }
       .brand-subtitle{
         margin-top: 2px;
         font-size: 13px;
         color: var(--muted);
       }
-      .nav a{
-        text-decoration: none;
-        color: var(--muted);
-        font-size: 14px;
-        margin-left: 16px;
-      }
-      .nav a:hover{ color: var(--text); }
 
       /* Layout */
       .container{
-        max-width: 1100px;
+        max-width: 860px;
         margin: 0 auto;
         padding: 26px 22px 56px;
       }
       .pagehead h1{
         margin: 0;
-        font-size: 28px;
-        letter-spacing: -0.02em;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
       }
-      .pagehead p{ margin: 10px 0 0; }
+      .pagehead p{ margin: 8px 0 0; font-size: 13px; }
 
-      /* Cards */
-      .card{
-        background: var(--card);
+      /* Workflow */
+      .workflow{
+        margin-top: 18px;
+        background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        padding: 18px;
-        margin-top: 16px;
       }
-
-      /* Step wizard */
-      .steps {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 14px;
-        margin-top: 14px;
+      .section{
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
       }
-      @media (max-width: 980px) {
-        .steps { grid-template-columns: 1fr; }
-      }
-      .stepcard{
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 16px;
-        background: #fbfcff;
-        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
+      .section:last-child{ border-bottom: none; }
+      .sectionhead{
         display: flex;
-        gap: 12px;
-        min-height: 210px;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 10px;
       }
-      .stepcard.locked{ opacity: 0.55; }
-      .stepnum{
-        width: 38px;
-        height: 38px;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        background: #fff;
+      .badge{
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        border: 1px solid var(--border-strong);
         display: grid;
         place-items: center;
-        font-weight: 800;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text);
       }
-      .stepbody{ width: 100%; }
-      .steptitle{ font-weight: 800; margin-bottom: 6px; }
-      .stephelp{ margin-bottom: 10px; }
+      .badge.muted{ color: var(--muted); border-color: var(--border); }
+      .sectiontitle{
+        font-weight: 700;
+        font-size: 14px;
+        margin: 0;
+      }
+      .sectiondesc{
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
 
       /* Inputs / buttons */
       input[type="file"]{
         width: 100%;
         border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 10px 12px;
-        background: #fff;
+        border-radius: var(--radius);
+        padding: 9px 10px;
+        background: var(--surface);
       }
       button{
-        border-radius: 12px;
-        padding: 10px 14px;
+        border-radius: var(--radius);
+        padding: 8px 10px;
         border: 1px solid var(--border);
-        background: #fff;
+        background: var(--surface);
         cursor: pointer;
         font-weight: 650;
-      }
-      button:hover{ border-color: #cfd6e5; }
-      button:disabled{ opacity: 0.55; cursor: not-allowed; }
-      .primary{
-        border-color: #0b0f19;
-        background: #0b0f19;
-        color: #fff;
-      }
-      .primary:hover{ filter: brightness(0.97); }
-
-      /* Meta row */
-      .stepmeta{
-        margin-top: 10px;
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        flex-wrap: wrap;
         font-size: 13px;
       }
-      .link{
+      button:hover{ border-color: var(--border-strong); }
+      button:disabled{ opacity: 0.55; cursor: not-allowed; }
+      .primary{
+        border-color: #111827;
+        background: #111827;
+        color: #ffffff;
+      }
+
+      .row{
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .rowmeta{
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        font-size: 12px;
         color: var(--muted);
-        text-decoration: none;
       }
-      .link:hover{
-        color: var(--text);
-        text-decoration: underline;
+      .status{
+        color: var(--muted);
       }
+      .status.ok{ color: #0f5132; }
+      .req{
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .lockedtext{
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+
+      /* Spinner (shown only while request is in-flight) */
+      .spinner{
+        display: none;
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--border-strong);
+        border-top-color: transparent;
+        border-radius: 999px;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
 
       /* Pills / badges */
       .pill{
@@ -203,7 +212,7 @@ HTML = """
         font-size: 12px;
         border-radius: 999px;
         border: 1px solid var(--border);
-        background: #fff;
+        background: var(--surface);
         color: var(--muted);
       }
       .pill.ok{ background: #eafff2; border-color: #b8f0c9; color: #1b6b3a; }
@@ -219,15 +228,15 @@ HTML = """
         vertical-align: top;
         font-size: 14px;
       }
-      th { color: var(--muted); font-weight: 700; background: #fbfcff; }
-      tr:hover td { background: #fbfcff; }
+      th { color: var(--muted); font-weight: 700; background: #fafbfc; }
+      tr:hover td { background: #fafbfc; }
 
       pre {
         white-space: pre-wrap;
-        background: #f6f7fb;
+        background: #f4f5f7;
         border: 1px solid var(--border);
         padding: 12px;
-        border-radius: 14px;
+        border-radius: var(--radius);
         overflow-x: auto;
         margin: 0;
       }
@@ -239,6 +248,13 @@ HTML = """
         letter-spacing: -0.01em;
       }
       .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
+      details summary{
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 13px;
+        user-select: none;
+      }
     </style>
   </head>
 
@@ -246,156 +262,163 @@ HTML = """
     <header class="topbar">
       <div class="brand">
         <div class="brand-title">Codebook Validator</div>
-        <div class="brand-subtitle">Lab-grade dataset checks</div>
+        <div class="brand-subtitle">MVP v1</div>
       </div>
-      <nav class="nav">
-        <a href="#">Help</a>
-        <a href="#">How it works</a>
-        <a href="#">Sample files</a>
-      </nav>
     </header>
 
     <main class="container">
       <div class="pagehead">
         <h1>Check Data</h1>
-        <p class="muted">
-          Upload your codebook instructions and coded Excel file to receive validation feedback.
-          We validate <b>numerical codes</b> and simple conditionals; we do <b>not</b> validate narratives.
-        </p>
+        <p class="muted">Uploads a codebook PDF and coded Excel file for automated validation of numerical codes and conditional logic.</p>
       </div>
 
-      <div class="card">
-        <div class="section-title">Validate Codebook</div>
-        <p class="muted" style="margin:0;">Complete each step to unlock the next. Validation runs once you submit Step 3.</p>
-
-        <form action="/validate" method="post" enctype="multipart/form-data" id="wizardForm">
-          <div class="steps">
-
-            <!-- STEP 1 -->
-            <div class="stepcard" id="step1">
-              <div class="stepnum">1</div>
-              <div class="stepbody">
-                <div class="steptitle">Upload Codebook Instructions (PDF)</div>
-                <div class="stephelp muted">Select the instruction manual PDF.</div>
-
-                <input type="file" name="pdf" id="pdfInput" accept="application/pdf" required />
-
-                <div class="stepmeta">
-                  <span id="pdfStatus" class="pill">Not selected</span>
-                  <span id="pdfName" class="muted"></span>
-                  <a href="#" id="pdfReplace" class="link">Replace</a>
-                </div>
-              </div>
+      <form action="/validate" method="post" enctype="multipart/form-data" id="workflowForm" class="workflow">
+        <!-- STEP 1 -->
+        <section class="section" id="step1">
+          <div class="sectionhead">
+            <div class="badge" id="badge1">1</div>
+            <div>
+              <p class="sectiontitle">Upload codebook instructions</p>
+              <p class="sectiondesc">Input format: PDF (.pdf).</p>
             </div>
-
-            <!-- STEP 2 -->
-            <div class="stepcard locked" id="step2">
-              <div class="stepnum">2</div>
-              <div class="stepbody">
-                <div class="steptitle">Upload Coded Excel File (.xlsx)</div>
-                <div class="stephelp muted" id="xlsxHelp">Locked until Step 1 is complete.</div>
-
-                <input type="file" name="xlsx" id="xlsxInput" accept=".xlsx" required disabled />
-
-                <div class="stepmeta">
-                  <span id="xlsxStatus" class="pill">Not selected</span>
-                  <span id="xlsxName" class="muted"></span>
-                  <a href="#" id="xlsxReplace" class="link">Replace</a>
-                </div>
-              </div>
-            </div>
-
-            <!-- STEP 3 -->
-            <div class="stepcard locked" id="step3">
-              <div class="stepnum">3</div>
-              <div class="stepbody">
-                <div class="steptitle">Run Validation</div>
-                <div class="stephelp muted" id="runHelp">Locked until Step 2 is complete.</div>
-
-                <button type="submit" id="runBtn" class="primary" disabled>Validate</button>
-
-                <div class="stepmeta muted">
-                  Results will appear below after the run finishes.
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </form>
-      </div>
-
-      {% if report %}
-        <div class="card">
-          <div class="section-title">Summary</div>
-
-          <div class="chips" style="margin-bottom:12px;">
-            <span class="pill error">Errors: {{ report.workbook_summary.total_errors }}</span>
-            <span class="pill warn">Warnings: {{ report.workbook_summary.total_warnings }}</span>
-            <span class="pill ok">Tabs checked: {{ report.workbook_summary.tabs_validated }}</span>
           </div>
 
-          <div style="display:grid; gap:6px;">
-            <div><span class="muted"><b>PDF variables detected:</b></span> {{ report.pdf_summary.variables_detected }}</div>
-            <div><span class="muted"><b>Candidate rules extracted:</b></span> {{ report.pdf_summary.rules_extracted }}</div>
-            <div><span class="muted"><b>Rules by confidence:</b></span> {{ report.pdf_summary.rules_by_confidence }}</div>
+          <div class="row">
+            <input type="file" name="pdf" id="pdfInput" accept="application/pdf" required />
+            <div class="rowmeta">
+              <span id="pdfStatus" class="status">No file uploaded</span>
+              <span id="pdfName"></span>
+            </div>
+            <div class="req">Constraint: PDF must contain variable identifiers in bracket form (e.g., [land_post_expro_comp]) for best extraction.</div>
           </div>
+        </section>
+
+        <!-- STEP 2 -->
+        <section class="section" id="step2">
+          <div class="sectionhead">
+            <div class="badge muted" id="badge2">2</div>
+            <div>
+              <p class="sectiontitle">Upload coded Excel workbook</p>
+              <p class="sectiondesc">Input format: Excel (.xlsx). Multi-tab workbooks are supported.</p>
+            </div>
+          </div>
+
+          <div class="row">
+            <input type="file" name="xlsx" id="xlsxInput" accept=".xlsx" required disabled />
+            <div class="rowmeta">
+              <span id="xlsxStatus" class="status">No file uploaded</span>
+              <span id="xlsxName"></span>
+            </div>
+            <div class="lockedtext" id="xlsxLock">Step 1 incomplete.</div>
+            <div class="req">Scope: validation applies to numerical-code fields and conditional logic only. Narrative fields are not validated.</div>
+          </div>
+        </section>
+
+        <!-- STEP 3 -->
+        <section class="section" id="step3">
+          <div class="sectionhead">
+            <div class="badge muted" id="badge3">3</div>
+            <div>
+              <p class="sectiontitle">Run validation</p>
+              <p class="sectiondesc">Executes rule extraction and workbook validation.</p>
+            </div>
+          </div>
+
+          <div class="row">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <button type="submit" id="runBtn" class="primary" disabled>Run validation</button>
+              <span id="runSpinner" class="spinner" aria-hidden="true"></span>
+              <span id="runStatus" class="status"></span>
+            </div>
+            <div class="lockedtext" id="runLock">Step 2 incomplete.</div>
+          </div>
+        </section>
+      </form>
+
+      <!-- OUTPUT (always visible) -->
+      <section class="workflow" style="margin-top:16px;">
+        <div class="section" style="border-bottom: 1px solid var(--border);">
+          <p class="sectiontitle" style="margin:0;">Validation Output</p>
+          <p class="sectiondesc" style="margin-bottom:0;">Results display after a validation run completes.</p>
         </div>
 
-        {% for tab in report.tabs %}
-          <div class="card">
-            <div class="section-title">Tab: {{ tab.tab_name }}</div>
-            <div class="chips" style="margin: 10px 0 14px;">
-              <span class="pill error">Errors: {{ tab.summary.errors }}</span>
-              <span class="pill warn">Warnings: {{ tab.summary.warnings }}</span>
-              <span class="pill ok">OK checks: {{ tab.summary.ok }}</span>
+        <div class="section">
+          {% if report %}
+            <div class="section-title">Summary</div>
+
+            <div class="chips" style="margin-bottom:12px;">
+              <span class="pill error">Errors: {{ report.workbook_summary.total_errors }}</span>
+              <span class="pill warn">Warnings: {{ report.workbook_summary.total_warnings }}</span>
+              <span class="pill ok">Tabs checked: {{ report.workbook_summary.tabs_validated }}</span>
             </div>
 
-            <div class="section-title" style="margin-top:0;">Issues</div>
+            <div style="display:grid; gap:6px; font-size: 13px;">
+              <div><span class="muted"><b>PDF variables detected:</b></span> {{ report.pdf_summary.variables_detected }}</div>
+              <div><span class="muted"><b>Candidate rules extracted:</b></span> {{ report.pdf_summary.rules_extracted }}</div>
+              <div><span class="muted"><b>Rules by confidence:</b></span> {{ report.pdf_summary.rules_by_confidence }}</div>
+            </div>
 
-            {% if tab.issues|length == 0 %}
-              <p class="muted" style="margin:0;">No issues found.</p>
-            {% else %}
-              <div style="overflow-x:auto;">
-                <table>
-                  <thead>
-                    <tr>
-                      <th style="width:110px;">Severity</th>
-                      <th style="width:190px;">Variable</th>
-                      <th>Message</th>
-                      <th style="width:220px;">Expected</th>
-                      <th style="width:220px;">Actual</th>
-                      <th style="width:340px;">Evidence</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for issue in tab.issues %}
-                      <tr>
-                        <td>
-                          {% if issue.severity == "error" %}
-                            <span class="pill error">error</span>
-                          {% else %}
-                            <span class="pill warn">warning</span>
-                          {% endif %}
-                        </td>
-                        <td><b>{{ issue.variable }}</b></td>
-                        <td>{{ issue.message }}</td>
-                        <td class="muted">{{ issue.expected }}</td>
-                        <td class="muted">{{ issue.actual }}</td>
-                        <td><pre>{{ issue.evidence }}</pre></td>
-                      </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
+            {% for tab in report.tabs %}
+              <div style="margin-top:16px;">
+                <div class="section-title" style="margin-bottom:6px;">Tab: {{ tab.tab_name }}</div>
+                <div class="chips" style="margin: 10px 0 14px;">
+                  <span class="pill error">Errors: {{ tab.summary.errors }}</span>
+                  <span class="pill warn">Warnings: {{ tab.summary.warnings }}</span>
+                  <span class="pill ok">OK checks: {{ tab.summary.ok }}</span>
+                </div>
+
+                <div class="section-title" style="margin-top:0;">Issues</div>
+
+                {% if tab.issues|length == 0 %}
+                  <p class="muted" style="margin:0; font-size:13px;">No issues found.</p>
+                {% else %}
+                  <div style="overflow-x:auto;">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style="width:110px;">Severity</th>
+                          <th style="width:190px;">Variable</th>
+                          <th>Message</th>
+                          <th style="width:220px;">Expected</th>
+                          <th style="width:220px;">Actual</th>
+                          <th style="width:340px;">Evidence</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for issue in tab.issues %}
+                          <tr>
+                            <td>
+                              {% if issue.severity == "error" %}
+                                <span class="pill error">error</span>
+                              {% else %}
+                                <span class="pill warn">warning</span>
+                              {% endif %}
+                            </td>
+                            <td><b>{{ issue.variable }}</b></td>
+                            <td>{{ issue.message }}</td>
+                            <td class="muted">{{ issue.expected }}</td>
+                            <td class="muted">{{ issue.actual }}</td>
+                            <td><pre>{{ issue.evidence }}</pre></td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% endif %}
               </div>
-            {% endif %}
-          </div>
-        {% endfor %}
+            {% endfor %}
 
-        <div class="card">
-          <div class="section-title">Raw JSON (debug)</div>
-          <pre>{{ report_json }}</pre>
+            <div style="margin-top: 14px;">
+              <details>
+                <summary>Raw JSON</summary>
+                <div style="margin-top:10px;"><pre>{{ report_json }}</pre></div>
+              </details>
+            </div>
+          {% else %}
+            <p class="muted" style="margin:0; font-size: 13px;">No report generated.</p>
+          {% endif %}
         </div>
-      {% endif %}
+      </section>
     </main>
 
     <script>
@@ -403,103 +426,73 @@ HTML = """
       const xlsxInput = document.getElementById("xlsxInput");
       const runBtn = document.getElementById("runBtn");
 
-      const step2 = document.getElementById("step2");
-      const step3 = document.getElementById("step3");
-
+      const badge2 = document.getElementById("badge2");
+      const badge3 = document.getElementById("badge3");
       const pdfStatus = document.getElementById("pdfStatus");
       const xlsxStatus = document.getElementById("xlsxStatus");
       const pdfName = document.getElementById("pdfName");
       const xlsxName = document.getElementById("xlsxName");
+      const xlsxLock = document.getElementById("xlsxLock");
+      const runLock = document.getElementById("runLock");
 
-      const xlsxHelp = document.getElementById("xlsxHelp");
-      const runHelp = document.getElementById("runHelp");
-
-      function setLocked(el, locked) {
-        el.classList.toggle("locked", locked);
-      }
-
-      function resetFrom(step) {
-        if (step <= 1) {
-          // Changing PDF invalidates later steps (UI-only)
-          xlsxInput.value = "";
-          xlsxInput.disabled = true;
-          setLocked(step2, true);
-          xlsxStatus.textContent = "Not selected";
-          xlsxStatus.className = "pill";
-          xlsxName.textContent = "";
-          xlsxHelp.textContent = "Locked until Step 1 is complete.";
-        }
-        if (step <= 2) {
-          runBtn.disabled = true;
-          setLocked(step3, true);
-          runHelp.textContent = "Locked until Step 2 is complete.";
-        }
-      }
+      const runSpinner = document.getElementById("runSpinner");
+      const runStatus = document.getElementById("runStatus");
+      const form = document.getElementById("workflowForm");
 
       function update() {
         const hasPdf = pdfInput.files && pdfInput.files.length > 0;
         const hasXlsx = xlsxInput.files && xlsxInput.files.length > 0;
 
-        // Step 1 status
+        // Step 1
         if (hasPdf) {
-          pdfStatus.textContent = "Selected";
-          pdfStatus.className = "pill ok";
+          pdfStatus.textContent = "File uploaded";
+          pdfStatus.classList.add("ok");
           pdfName.textContent = pdfInput.files[0].name;
         } else {
-          pdfStatus.textContent = "Not selected";
-          pdfStatus.className = "pill";
+          pdfStatus.textContent = "No file uploaded";
+          pdfStatus.classList.remove("ok");
           pdfName.textContent = "";
         }
 
         // Step 2 unlock
         xlsxInput.disabled = !hasPdf;
-        setLocked(step2, !hasPdf);
-        xlsxHelp.textContent = hasPdf
-          ? "Select the coded Excel workbook (.xlsx)."
-          : "Locked until Step 1 is complete.";
+        badge2.classList.toggle("muted", !hasPdf);
+        xlsxLock.textContent = hasPdf ? "" : "Step 1 incomplete.";
+        xlsxLock.style.display = hasPdf ? "none" : "block";
 
-        // Step 2 status
         if (hasXlsx) {
-          xlsxStatus.textContent = "Selected";
-          xlsxStatus.className = "pill ok";
+          xlsxStatus.textContent = "File uploaded";
+          xlsxStatus.classList.add("ok");
           xlsxName.textContent = xlsxInput.files[0].name;
         } else {
-          xlsxStatus.textContent = "Not selected";
-          xlsxStatus.className = "pill";
+          xlsxStatus.textContent = "No file uploaded";
+          xlsxStatus.classList.remove("ok");
           xlsxName.textContent = "";
         }
 
         // Step 3 unlock
         const canRun = hasPdf && hasXlsx;
         runBtn.disabled = !canRun;
-        setLocked(step3, !canRun);
-        runHelp.textContent = canRun
-          ? "Ready to validate."
-          : "Locked until Step 2 is complete.";
+        badge3.classList.toggle("muted", !canRun);
+        runLock.textContent = canRun ? "" : "Step 2 incomplete.";
+        runLock.style.display = canRun ? "none" : "block";
       }
 
       pdfInput.addEventListener("change", () => {
-        resetFrom(1);
+        // PDF changes invalidate later inputs
+        xlsxInput.value = "";
         update();
       });
 
       xlsxInput.addEventListener("change", () => {
-        resetFrom(2);
         update();
       });
 
-      document.getElementById("pdfReplace").addEventListener("click", (e) => {
-        e.preventDefault();
-        pdfInput.value = "";
-        resetFrom(1);
-        update();
-      });
-
-      document.getElementById("xlsxReplace").addEventListener("click", (e) => {
-        e.preventDefault();
-        xlsxInput.value = "";
-        resetFrom(2);
-        update();
+      form.addEventListener("submit", () => {
+        // Show spinner during the synchronous POST /validate request.
+        runSpinner.style.display = "inline-block";
+        runStatus.textContent = "Running validation";
+        runBtn.disabled = true;
       });
 
       update();
