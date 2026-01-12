@@ -50,6 +50,11 @@ HTML = """
         --muted: #4b5563;
         --border: #d7dbe4;
         --border-strong: #c9cfdb;
+
+        /* Accent (used sparingly) */
+        --accent: #1f4e79;
+        --accent-ink: #ffffff;
+
         --radius: 6px;
       }
 
@@ -60,6 +65,7 @@ HTML = """
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
         color: var(--text);
         background: var(--page-bg);
+        overflow-x: hidden; /* prevents any accidental horizontal spill */
       }
 
       .muted { color: var(--muted); }
@@ -89,6 +95,7 @@ HTML = """
         max-width: 860px;
         margin: 0 auto;
         padding: 26px 22px 56px;
+        min-width: 0;
       }
       .pagehead h1{
         margin: 0;
@@ -96,7 +103,11 @@ HTML = """
         font-weight: 700;
         letter-spacing: -0.01em;
       }
-      .pagehead p{ margin: 8px 0 0; font-size: 13px; }
+      .pagehead p{
+        margin: 8px 0 0;
+        font-size: 13px;
+        overflow-wrap: anywhere;
+      }
 
       /* Workflow */
       .workflow{
@@ -104,18 +115,42 @@ HTML = """
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius);
+        overflow: hidden; /* ensures nothing can spill outside */
       }
       .section{
         padding: 14px 16px;
         border-bottom: 1px solid var(--border);
+        min-width: 0;
       }
       .section:last-child{ border-bottom: none; }
-      .sectionhead{
-        display: flex;
-        align-items: baseline;
-        gap: 10px;
-        margin-bottom: 10px;
+
+      /* Continuous step rail (timeline-style) */
+      .sectiongrid{
+        display: grid;
+        grid-template-columns: 34px 1fr;
+        column-gap: 12px;
+        min-width: 0;
       }
+      .steprail{
+        position: relative;
+        display: flex;
+        justify-content: center;
+        min-width: 0;
+      }
+      .steprail::after{
+        content:"";
+        position: absolute;
+        top: 26px;      /* starts just under the badge */
+        bottom: -16px;  /* extends into next section for continuous flow */
+        width: 2px;
+        background: var(--border);
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      .section.last .steprail::after{
+        display: none; /* no line after final step */
+      }
+
       .badge{
         width: 20px;
         height: 20px;
@@ -126,8 +161,14 @@ HTML = """
         font-size: 12px;
         font-weight: 700;
         color: var(--text);
+        background: var(--surface);
       }
       .badge.muted{ color: var(--muted); border-color: var(--border); }
+      .badge.active{
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
       .sectiontitle{
         font-weight: 700;
         font-size: 14px;
@@ -137,6 +178,7 @@ HTML = """
         margin: 6px 0 0;
         color: var(--muted);
         font-size: 13px;
+        overflow-wrap: anywhere;
       }
 
       /* Inputs / buttons */
@@ -146,6 +188,7 @@ HTML = """
         border-radius: var(--radius);
         padding: 9px 10px;
         background: var(--surface);
+        min-width: 0;
       }
       button{
         border-radius: var(--radius);
@@ -158,16 +201,18 @@ HTML = """
       }
       button:hover{ border-color: var(--border-strong); }
       button:disabled{ opacity: 0.55; cursor: not-allowed; }
+
       .primary{
-        border-color: #111827;
-        background: #111827;
-        color: #ffffff;
+        border-color: var(--accent);
+        background: var(--accent);
+        color: var(--accent-ink);
       }
 
       .row{
         display: grid;
         grid-template-columns: 1fr;
         gap: 8px;
+        min-width: 0;
       }
       .rowmeta{
         display: flex;
@@ -176,23 +221,30 @@ HTML = """
         align-items: center;
         font-size: 12px;
         color: var(--muted);
+        min-width: 0;
       }
       .status{
         color: var(--muted);
       }
       .status.ok{ color: #0f5132; }
-      .req{
-        font-size: 12px;
-        color: var(--muted);
-        margin-top: 2px;
+
+      /* Filename stays inside container */
+      .filename{
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
       }
+
       .lockedtext{
         font-size: 12px;
         color: var(--muted);
         margin-top: 6px;
       }
 
-      /* Spinner (shown only while request is in-flight) */
+      /* Spinner */
       .spinner{
         display: none;
         width: 14px;
@@ -204,7 +256,7 @@ HTML = """
       }
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      /* Pills / badges */
+      /* Pills */
       .pill{
         display: inline-flex;
         align-items: center;
@@ -227,21 +279,25 @@ HTML = """
         text-align: left;
         vertical-align: top;
         font-size: 14px;
+        overflow-wrap: anywhere; /* keeps long text in cells */
+        word-break: break-word;
       }
       th { color: var(--muted); font-weight: 700; background: #fafbfc; }
       tr:hover td { background: #fafbfc; }
 
       pre {
         white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
         background: #f4f5f7;
         border: 1px solid var(--border);
         padding: 12px;
         border-radius: var(--radius);
         overflow-x: auto;
         margin: 0;
+        max-width: 100%;
       }
 
-      /* Results spacing */
       .section-title{
         margin: 0 0 8px;
         font-size: 16px;
@@ -262,75 +318,82 @@ HTML = """
     <header class="topbar">
       <div class="brand">
         <div class="brand-title">Codebook Validator</div>
-        <div class="brand-subtitle">MVP v1</div>
+        <div class="brand-subtitle">Statebuilding After War</div>
       </div>
     </header>
 
     <main class="container">
       <div class="pagehead">
         <h1>Check Data</h1>
-        <p class="muted">Uploads a codebook PDF and coded Excel file for automated validation of numerical codes and conditional logic.</p>
+        <p class="muted">Upload PDF codebook instructions and a coded Excel file for automated validation of numerical codes, conditional logic, and references.</p>
       </div>
 
       <form action="/validate" method="post" enctype="multipart/form-data" id="workflowForm" class="workflow">
         <!-- STEP 1 -->
         <section class="section" id="step1">
-          <div class="sectionhead">
-            <div class="badge" id="badge1">1</div>
-            <div>
+          <div class="sectiongrid">
+            <div class="steprail">
+              <div class="badge active" id="badge1">1</div>
+            </div>
+
+            <div style="min-width:0;">
               <p class="sectiontitle">Upload codebook instructions</p>
               <p class="sectiondesc">Input format: PDF (.pdf).</p>
-            </div>
-          </div>
 
-          <div class="row">
-            <input type="file" name="pdf" id="pdfInput" accept="application/pdf" required />
-            <div class="rowmeta">
-              <span id="pdfStatus" class="status">No file uploaded</span>
-              <span id="pdfName"></span>
+              <div class="row" style="margin-top:10px;">
+                <input type="file" name="pdf" id="pdfInput" accept="application/pdf" required />
+                <div class="rowmeta">
+                  <span id="pdfStatus" class="status">No file uploaded</span>
+                  <span id="pdfName" class="filename"></span>
+                </div>
+              </div>
             </div>
-            <div class="req">Constraint: PDF must contain variable identifiers in bracket form (e.g., [land_post_expro_comp]) for best extraction.</div>
           </div>
         </section>
 
         <!-- STEP 2 -->
         <section class="section" id="step2">
-          <div class="sectionhead">
-            <div class="badge muted" id="badge2">2</div>
-            <div>
-              <p class="sectiontitle">Upload coded Excel workbook</p>
-              <p class="sectiondesc">Input format: Excel (.xlsx). Multi-tab workbooks are supported.</p>
+          <div class="sectiongrid">
+            <div class="steprail">
+              <div class="badge muted" id="badge2">2</div>
             </div>
-          </div>
 
-          <div class="row">
-            <input type="file" name="xlsx" id="xlsxInput" accept=".xlsx" required disabled />
-            <div class="rowmeta">
-              <span id="xlsxStatus" class="status">No file uploaded</span>
-              <span id="xlsxName"></span>
+            <div style="min-width:0;">
+              <p class="sectiontitle">Upload coded Excel workbook</p>
+              <p class="sectiondesc">Input format: Excel (.xlsx).</p>
+
+              <div class="row" style="margin-top:10px;">
+                <input type="file" name="xlsx" id="xlsxInput" accept=".xlsx" required disabled />
+                <div class="rowmeta">
+                  <span id="xlsxStatus" class="status">No file uploaded</span>
+                  <span id="xlsxName" class="filename"></span>
+                </div>
+                <div class="lockedtext" id="xlsxLock">Step 1 incomplete.</div>
+              </div>
             </div>
-            <div class="lockedtext" id="xlsxLock">Step 1 incomplete.</div>
-            <div class="req">Scope: validation applies to numerical-code fields and conditional logic only. Narrative fields are not validated.</div>
           </div>
         </section>
 
         <!-- STEP 3 -->
-        <section class="section" id="step3">
-          <div class="sectionhead">
-            <div class="badge muted" id="badge3">3</div>
-            <div>
-              <p class="sectiontitle">Run validation</p>
-              <p class="sectiondesc">Executes rule extraction and workbook validation.</p>
+        <section class="section last" id="step3">
+          <div class="sectiongrid">
+            <div class="steprail">
+              <div class="badge muted" id="badge3">3</div>
             </div>
-          </div>
 
-          <div class="row">
-            <div style="display:flex; align-items:center; gap:10px;">
-              <button type="submit" id="runBtn" class="primary" disabled>Run validation</button>
-              <span id="runSpinner" class="spinner" aria-hidden="true"></span>
-              <span id="runStatus" class="status"></span>
+            <div style="min-width:0;">
+              <p class="sectiontitle">Validate</p>
+              <p class="sectiondesc">Executes rule extraction and workbook validation.</p>
+
+              <div class="row" style="margin-top:10px;">
+                <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                  <button type="submit" id="runBtn" class="primary" disabled>Validate</button>
+                  <span id="runSpinner" class="spinner" aria-hidden="true"></span>
+                  <span id="runStatus" class="status"></span>
+                </div>
+                <div class="lockedtext" id="runLock">Step 2 incomplete.</div>
+              </div>
             </div>
-            <div class="lockedtext" id="runLock">Step 2 incomplete.</div>
           </div>
         </section>
       </form>
@@ -352,14 +415,14 @@ HTML = """
               <span class="pill ok">Tabs checked: {{ report.workbook_summary.tabs_validated }}</span>
             </div>
 
-            <div style="display:grid; gap:6px; font-size: 13px;">
+            <div style="display:grid; gap:6px; font-size: 13px; min-width:0;">
               <div><span class="muted"><b>PDF variables detected:</b></span> {{ report.pdf_summary.variables_detected }}</div>
               <div><span class="muted"><b>Candidate rules extracted:</b></span> {{ report.pdf_summary.rules_extracted }}</div>
               <div><span class="muted"><b>Rules by confidence:</b></span> {{ report.pdf_summary.rules_by_confidence }}</div>
             </div>
 
             {% for tab in report.tabs %}
-              <div style="margin-top:16px;">
+              <div style="margin-top:16px; min-width:0;">
                 <div class="section-title" style="margin-bottom:6px;">Tab: {{ tab.tab_name }}</div>
                 <div class="chips" style="margin: 10px 0 14px;">
                   <span class="pill error">Errors: {{ tab.summary.errors }}</span>
@@ -372,7 +435,7 @@ HTML = """
                 {% if tab.issues|length == 0 %}
                   <p class="muted" style="margin:0; font-size:13px;">No issues found.</p>
                 {% else %}
-                  <div style="overflow-x:auto;">
+                  <div style="overflow-x:auto; max-width:100%;">
                     <table>
                       <thead>
                         <tr>
@@ -457,6 +520,8 @@ HTML = """
         // Step 2 unlock
         xlsxInput.disabled = !hasPdf;
         badge2.classList.toggle("muted", !hasPdf);
+        badge2.classList.toggle("active", hasPdf);
+
         xlsxLock.textContent = hasPdf ? "" : "Step 1 incomplete.";
         xlsxLock.style.display = hasPdf ? "none" : "block";
 
@@ -473,7 +538,10 @@ HTML = """
         // Step 3 unlock
         const canRun = hasPdf && hasXlsx;
         runBtn.disabled = !canRun;
+
         badge3.classList.toggle("muted", !canRun);
+        badge3.classList.toggle("active", canRun);
+
         runLock.textContent = canRun ? "" : "Step 2 incomplete.";
         runLock.style.display = canRun ? "none" : "block";
       }
@@ -489,9 +557,8 @@ HTML = """
       });
 
       form.addEventListener("submit", () => {
-        // Show spinner during the synchronous POST /validate request.
         runSpinner.style.display = "inline-block";
-        runStatus.textContent = "Running validation";
+        runStatus.textContent = "Validating";
         runBtn.disabled = true;
       });
 
