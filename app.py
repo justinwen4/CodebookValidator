@@ -284,6 +284,13 @@ HTML = """
       }
       th { color: var(--muted); font-weight: 700; background: #fafbfc; }
       tr:hover td { background: #fafbfc; }
+      
+      /* Prevent header text from breaking into vertical letters */
+      th {
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: normal;
+      }
 
       pre {
         white-space: pre-wrap;
