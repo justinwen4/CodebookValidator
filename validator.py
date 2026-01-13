@@ -598,6 +598,44 @@ def _normalize_code_value(value: Any) -> Optional[Any]:
     return value
 
 
+# --- Excel template color-code helpers ---
+
+def _cell_has_fill(cell) -> bool:
+    """True if the cell has a background fill (used for template color-coding)."""
+    try:
+        f = cell.fill
+        return bool(getattr(f, "patternType", None)) and f.patternType != "none"
+    except Exception:
+        return False
+
+
+def _is_blank(v: Any) -> bool:
+    return v is None or (isinstance(v, str) and v.strip() == "")
+
+
+def _has_any_year(v: Any) -> bool:
+    """Loose check: contains at least one 4-digit year (or a single numeric year)."""
+    if v is None:
+        return False
+
+    if isinstance(v, (int, float)):
+        try:
+            if v != v:  # NaN
+                return False
+        except Exception:
+            pass
+        y = int(v)
+        return 1000 <= y <= 2200
+
+    if isinstance(v, str):
+        s = v.strip()
+        if s == "" or s.upper() == "NA":
+            return False
+        return re.search(r"\b(1[0-9]{3}|20[0-9]{2}|21[0-9]{2})\b", s) is not None
+
+    return False
+
+
 def parse_excel_workbook(xlsx_path: str) -> Dict[str, Any]:
     """
     Parse the Excel workbook into a normalized structure.
@@ -649,10 +687,15 @@ def parse_excel_workbook(xlsx_path: str) -> Dict[str, Any]:
                 # We only treat bracketed variable IDs as variables.
                 continue
 
-            code = _normalize_code_value(ws.cell(r, 3).value)  # col C
-            year = ws.cell(r, 4).value  # col D (we don't over-normalize years)
-            policy = ws.cell(r, 5).value  # col E
-            narrative = ws.cell(r, 6).value  # col F
+            code_cell = ws.cell(r, 3)  # col C
+            year_cell = ws.cell(r, 4)  # col D
+            policy_cell = ws.cell(r, 5)  # col E
+            narrative_cell = ws.cell(r, 6)  # col F
+
+            code = _normalize_code_value(code_cell.value)
+            year = year_cell.value  # (we don't over-normalize years)
+            policy = policy_cell.value
+            narrative = narrative_cell.value
 
             rows[var] = {
                 "code": code,
@@ -660,6 +703,15 @@ def parse_excel_workbook(xlsx_path: str) -> Dict[str, Any]:
                 "policy": policy,
                 "narrative": narrative,
                 "row_index": r,
+
+                # Template-driven validation flags
+                "year_required_by_color": _cell_has_fill(year_cell),
+                "no_code_by_color": _cell_has_fill(code_cell),
+
+                # Cell references for explainability
+                "cell_code": f"C{r}",
+                "cell_year": f"D{r}",
+                "cell_policy": f"E{r}",
             }
 
         tabs[sheet_name] = {
@@ -757,6 +809,56 @@ def validate_workbook(pdf_model: Dict[str, Any], workbook: Dict[str, Any]) -> Di
             new_issues, new_ok = _apply_rule(rule, tab_name, tab["rows"])
             issues.extend(new_issues)
             ok_checks += new_ok
+
+        # 3b) Template color-code validation (from Excel instructions)
+        for var, row in tab.get("rows", {}).items():
+            code = row.get("code")
+            year = row.get("year")
+            policy = row.get("policy")
+
+            # Blue year cell => year required
+            if row.get("year_required_by_color") and not _has_any_year(year):
+                issues.append(Issue(
+                    severity="error",
+                    tab_name=tab_name,
+                    variable=var,
+                    message="Year is required (colored year cell) but missing/invalid.",
+                    expected="Year(s) implemented (at least one 4-digit year).",
+                    actual=repr(year),
+                    evidence=f"Template color-coding indicates {row.get('cell_year','Year cell')} requires a year."
+                ))
+            else:
+                ok_checks += 1
+
+            # Gray code cell => no numerical code allowed
+            if row.get("no_code_by_color"):
+                # allow blank/None and literal NA
+                if code not in (None, "NA") and not _is_blank(code):
+                    issues.append(Issue(
+                        severity="error",
+                        tab_name=tab_name,
+                        variable=var,
+                        message="Numerical code is not allowed (colored code cell) but a value was provided.",
+                        expected="Blank (or NA if you use NA for not-applicable).",
+                        actual=repr(code),
+                        evidence=f"Template color-coding indicates {row.get('cell_code','Code cell')} should not contain a numerical code."
+                    ))
+                else:
+                    ok_checks += 1
+
+            # If policies column is filled, years column must be filled
+            if not _is_blank(policy) and not _has_any_year(year):
+                issues.append(Issue(
+                    severity="error",
+                    tab_name=tab_name,
+                    variable=var,
+                    message="Policy is filled out, so year must also be filled out.",
+                    expected="Year(s) implemented present when policy is provided.",
+                    actual=f"policy={repr(policy)}, year={repr(year)}",
+                    evidence=f"Template instruction: if {row.get('cell_policy','Policy cell')} is filled, {row.get('cell_year','Year cell')} must be too."
+                ))
+            else:
+                ok_checks += 1
 
         # 4) Citation cross-check (warn only)
         if citations_enabled:
