@@ -831,23 +831,6 @@ def validate_workbook(pdf_model: Dict[str, Any], workbook: Dict[str, Any]) -> Di
             year = row.get("year")
             policy = row.get("policy")
 
-            # Blue year cell => year required UNLESS the variable is coded as "did not exist" (0)
-            if row.get("year_required_by_color") and code != 0 and not _has_any_year(year):
-                issues.append(Issue(
-                    severity="error",
-                    tab_name=tab_name,
-                    variable=var,
-                    message="Year is required (colored year cell) but missing/invalid (unless coded 0 = did not exist).",
-                    expected="Year(s) implemented (at least one 4-digit year) when code is not 0.",
-                    actual=f"code={repr(code)}, year={repr(year)}",
-                    evidence=(
-                        f"Template color-coding indicates {row.get('cell_year','Year cell')} requires a year, "
-                        "except when the numerical code is 0 (did not exist)."
-                    )
-                ))
-            else:
-                ok_checks += 1
-
             # Gray code cell => no numerical code allowed
             if row.get("no_code_by_color"):
                 # allow blank/None and literal NA
