@@ -464,6 +464,18 @@ def _extract_reference_index(wb: "openpyxl.Workbook") -> Dict[str, Any]:
     names_norm: set = set()
     prev_author_block: Optional[str] = None
 
+    def add_phrase_variants(author_block: str) -> None:
+        toks = [t for t in author_block.split() if t]
+        if len(toks) < 2:
+            return
+        # Only add org-like phrases; skip obvious multi-author lists
+        if re.search(r"\b(and|&)\b", author_block) or author_block.count(",") >= 2:
+            return
+        for n in (2, 3, 4):
+            if len(toks) >= n:
+                names_norm.add(_norm_name(" ".join(toks[:n])))
+        names_norm.add(_norm_name(" ".join(toks[-2:])))
+
     for ln in lines:
         # If line begins with em-dash / repeated author, substitute previous author block
         if re.match(r"^[—–-]{2,}", ln) and prev_author_block:
@@ -477,6 +489,9 @@ def _extract_reference_index(wb: "openpyxl.Workbook") -> Dict[str, Any]:
         author_block = ln[:ym.start()].strip().rstrip(".")
         if author_block:
             prev_author_block = author_block
+            # Always include the full author/org block to catch multi-word orgs
+            names_norm.add(_norm_name(author_block))
+            add_phrase_variants(author_block)
 
         # If commas exist, likely "Lastname, Firstname, and Lastname ..."
         if "," in author_block:
@@ -794,7 +809,7 @@ def validate_workbook(pdf_model: Dict[str, Any], workbook: Dict[str, Any]) -> Di
                     tab_name=tab_name,
                     variable=var,
                     message="Variable exists in Excel but was not found in the PDF codebook text (might be a mismatch/typo).",
-                    expected="Variable should appear in codebook PDF as [var_name]",
+                    expected=f"Variable should appear in codebook PDF as {var}",
                     actual=var,
                     evidence="This warning is conservative: it only checks whether the bracketed ID appears anywhere in the PDF text."
                 ))
