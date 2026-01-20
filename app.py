@@ -16,9 +16,11 @@ Important MVP constraints (from PRD):
 
 from __future__ import annotations
 
+import json
 import os
+import shutil
 import uuid
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
 from flask import Flask, request, render_template_string, jsonify
 
@@ -33,6 +35,41 @@ APP = Flask(__name__)
 # Store uploads in a local folder so the app can read them.
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+SAVED_PDF_DIR = os.path.join(UPLOAD_DIR, "saved_pdfs")
+os.makedirs(SAVED_PDF_DIR, exist_ok=True)
+SAVED_INDEX_PATH = os.path.join(SAVED_PDF_DIR, "index.json")
+
+
+def _safe_slug(value: str) -> str:
+    value = value.strip().lower()
+    value = "".join(ch if ch.isalnum() or ch in ("-", "_") else "-" for ch in value)
+    value = value.strip("-_")
+    value = "-".join([seg for seg in value.split("-") if seg])
+    return value or uuid.uuid4().hex
+
+
+def _load_saved_pdfs() -> List[Dict[str, str]]:
+    try:
+        with open(SAVED_INDEX_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return [d for d in data if isinstance(d, dict)]
+    except Exception:
+        pass
+    return []
+
+
+def _save_saved_pdfs(entries: List[Dict[str, str]]) -> None:
+    with open(SAVED_INDEX_PATH, "w", encoding="utf-8") as f:
+        json.dump(entries, f, indent=2)
+
+
+def _get_saved_pdf_by_id(saved_id: str) -> Optional[Dict[str, str]]:
+    for entry in _load_saved_pdfs():
+        if entry.get("id") == saved_id:
+            return entry
+    return None
 
 
 HTML = """
@@ -189,6 +226,15 @@ HTML = """
         padding: 9px 10px;
         background: var(--surface);
         min-width: 0;
+      }
+      select, input[type="text"]{
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 9px 10px;
+        background: var(--surface);
+        min-width: 0;
+        font-size: 13px;
       }
       button{
         border-radius: var(--radius);
@@ -348,7 +394,20 @@ HTML = """
               <p class="sectiondesc">Input format: PDF (.pdf).</p>
 
               <div class="row" style="margin-top:10px;">
-                <input type="file" name="pdf" id="pdfInput" accept="application/pdf" required />
+                <input type="file" name="pdf" id="pdfInput" accept="application/pdf" />
+                <select name="saved_pdf" id="savedPdfSelect">
+                  <option value="">Or choose a saved PDF...</option>
+                  {% for pdf in saved_pdfs %}
+                    <option value="{{ pdf.id }}">{{ pdf.label }}</option>
+                  {% endfor %}
+                </select>
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                  <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+                    <input type="checkbox" id="savePdfCheck" name="save_pdf_flag" />
+                    Save uploaded PDF for reuse
+                  </label>
+                  <input type="text" name="save_pdf_label" id="savePdfLabel" placeholder="Saved PDF label (optional)" disabled />
+                </div>
                 <div class="rowmeta">
                   <span id="pdfStatus" class="status">No file uploaded</span>
                   <span id="pdfName" class="filename"></span>
@@ -493,6 +552,9 @@ HTML = """
 
     <script>
       const pdfInput = document.getElementById("pdfInput");
+      const savedPdfSelect = document.getElementById("savedPdfSelect");
+      const savePdfCheck = document.getElementById("savePdfCheck");
+      const savePdfLabel = document.getElementById("savePdfLabel");
       const xlsxInput = document.getElementById("xlsxInput");
       const runBtn = document.getElementById("runBtn");
 
@@ -510,14 +572,21 @@ HTML = """
       const form = document.getElementById("workflowForm");
 
       function update() {
-        const hasPdf = pdfInput.files && pdfInput.files.length > 0;
+        const hasPdfUpload = pdfInput.files && pdfInput.files.length > 0;
+        const hasSavedPdf = savedPdfSelect && savedPdfSelect.value !== "";
+        const hasPdf = hasPdfUpload || hasSavedPdf;
         const hasXlsx = xlsxInput.files && xlsxInput.files.length > 0;
 
         // Step 1
-        if (hasPdf) {
+        if (hasPdfUpload) {
           pdfStatus.textContent = "File uploaded";
           pdfStatus.classList.add("ok");
           pdfName.textContent = pdfInput.files[0].name;
+        } else if (hasSavedPdf) {
+          pdfStatus.textContent = "Saved PDF selected";
+          pdfStatus.classList.add("ok");
+          const opt = savedPdfSelect.options[savedPdfSelect.selectedIndex];
+          pdfName.textContent = opt ? opt.textContent : "";
         } else {
           pdfStatus.textContent = "No file uploaded";
           pdfStatus.classList.remove("ok");
@@ -551,12 +620,40 @@ HTML = """
 
         runLock.textContent = canRun ? "" : "Step 2 incomplete.";
         runLock.style.display = canRun ? "none" : "block";
+
+        // Save controls only apply to uploads
+        savePdfCheck.disabled = !hasPdfUpload;
+        if (!hasPdfUpload) {
+          savePdfCheck.checked = false;
+          savePdfLabel.value = "";
+          savePdfLabel.disabled = true;
+        } else {
+          savePdfLabel.disabled = !savePdfCheck.checked;
+        }
       }
 
       pdfInput.addEventListener("change", () => {
         // PDF changes invalidate later inputs
+        if (pdfInput.files && pdfInput.files.length > 0) {
+          savedPdfSelect.value = "";
+        }
         xlsxInput.value = "";
         update();
+      });
+
+      savedPdfSelect.addEventListener("change", () => {
+        if (savedPdfSelect.value) {
+          pdfInput.value = "";
+        }
+        xlsxInput.value = "";
+        update();
+      });
+
+      savePdfCheck.addEventListener("change", () => {
+        savePdfLabel.disabled = !savePdfCheck.checked;
+        if (!savePdfCheck.checked) {
+          savePdfLabel.value = "";
+        }
       });
 
       xlsxInput.addEventListener("change", () => {
@@ -579,7 +676,7 @@ HTML = """
 @APP.get("/")
 def home():
     """Render the upload form."""
-    return render_template_string(HTML, report=None)
+    return render_template_string(HTML, report=None, saved_pdfs=_load_saved_pdfs())
 
 
 @APP.post("/validate")
@@ -593,14 +690,41 @@ def validate_route():
     """
     pdf_file = request.files.get("pdf")
     xlsx_file = request.files.get("xlsx")
+    saved_pdf_id = request.form.get("saved_pdf", "").strip()
+    save_pdf_flag = request.form.get("save_pdf_flag") == "on"
+    save_pdf_label = request.form.get("save_pdf_label", "").strip()
 
-    if not pdf_file or not xlsx_file:
-        return "Missing pdf or xlsx upload", 400
+    if not xlsx_file:
+        return "Missing xlsx upload", 400
+
+    saved_entry = _get_saved_pdf_by_id(saved_pdf_id) if saved_pdf_id else None
+    if not pdf_file and not saved_entry:
+        return "Missing pdf upload or saved pdf selection", 400
 
     pdf_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4().hex}.pdf")
     xlsx_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4().hex}.xlsx")
-    pdf_file.save(pdf_path)
+    if pdf_file:
+        pdf_file.save(pdf_path)
+    else:
+        saved_path = os.path.join(SAVED_PDF_DIR, saved_entry["filename"])
+        if not os.path.exists(saved_path):
+            return "Saved pdf not found on disk", 400
+        shutil.copyfile(saved_path, pdf_path)
     xlsx_file.save(xlsx_path)
+
+    if pdf_file and save_pdf_flag:
+        label = save_pdf_label or os.path.splitext(pdf_file.filename or "codebook")[0]
+        slug = _safe_slug(label)
+        saved_filename = f"{slug}-{uuid.uuid4().hex}.pdf"
+        saved_path = os.path.join(SAVED_PDF_DIR, saved_filename)
+        shutil.copyfile(pdf_path, saved_path)
+        saved_entries = _load_saved_pdfs()
+        saved_entries.append({
+            "id": uuid.uuid4().hex,
+            "label": label,
+            "filename": saved_filename,
+        })
+        _save_saved_pdfs(saved_entries)
 
     pdf_model = extract_pdf_model(pdf_path)
     workbook = parse_excel_workbook(xlsx_path)
@@ -610,7 +734,12 @@ def validate_route():
     report_dict: Dict[str, Any] = report
     report_json = jsonify(report_dict).get_data(as_text=True)
 
-    return render_template_string(HTML, report=report_dict, report_json=report_json)
+    return render_template_string(
+        HTML,
+        report=report_dict,
+        report_json=report_json,
+        saved_pdfs=_load_saved_pdfs()
+    )
 
 
 @APP.get("/api/validate")
