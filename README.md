@@ -1,4 +1,4 @@
-# Codebook Validator (MVP)
+# Codebook Validator
 
 A small Flask web app that validates an Excel codebook workbook against rules extracted from a codebook PDF.
 
